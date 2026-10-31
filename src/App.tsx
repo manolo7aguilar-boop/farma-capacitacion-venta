@@ -4,7 +4,7 @@ import { m1Lessons } from './m1';
 import { m3Lessons } from './m3';
 import { bumpStreak, isAdminRole, modulePct, overallPct, type Progress, type StaffRole } from './store';
 import { firebaseConfigured } from './firebase';
-import { useCloud, login, logout, register, authErrorEs, loadTeam, updateUserRole, loadRegions, createRegion, renameRegion, deleteRegion, assignSupervisor, MAX_REGIONS, type UserDoc, type TeamRow, type Region } from './cloud';
+import { useCloud, login, logout, register, authErrorEs, loadTeam, updateUserRole, loadRegions, createRegion, renameRegion, deleteRegion, assignSupervisor, acceptDisclaimer, MAX_REGIONS, type UserDoc, type TeamRow, type Region } from './cloud';
 
 type View = { s: 'home' } | { s: 'path' } | { s: 'path1' } | { s: 'path3' } | { s: 'lesson'; id: number };
 const pathFor = (id: number) => id >= 200 ? 'path3' as const : id > 100 ? 'path1' as const : 'path' as const;
@@ -30,12 +30,18 @@ function CloudApp() {
   const { authReady, authUser, me, progress: p, setProgress: setP, error, setError } = useCloud();
   const [view, setView] = useState<View>({ s: 'home' });
   const [adminOk, setAdminOk] = useState(false);
+  const [accepted, setAccepted] = useState(false);
+  const [showNotice, setShowNotice] = useState(false);
   const current = allLessons.find(l => !p.completed.includes(l.id)) ?? allLessons[allLessons.length - 1];
 
   if (!authReady) return <div className="app"><main className="card-stack center"><p className="muted">Cargando…</p></main></div>;
   if (!authUser) return <div className="app"><AuthScreen /></div>;
   if (!me) return <div className="app"><main className="card-stack center"><p className="muted">{error || 'Cargando tu perfil…'}</p>
     <button className="btn ghost" onClick={() => logout()}>Salir</button></main></div>;
+
+  if (!me.disclaimerAccepted && !accepted) return <div className="app"><DisclaimerGate onAccept={async () => {
+    try { await acceptDisclaimer(me.uid); setAccepted(true); } catch { setError('No se pudo guardar la aceptación. Intenta de nuevo.'); }
+  }} error={error} /></div>;
 
   const showAdmin = adminOk && isAdminRole(me.role);
 
@@ -60,8 +66,26 @@ function CloudApp() {
             next={() => setView({ s: pathFor(view.id) })} />}
         </>
       )}
+      {view.s !== 'lesson' && <footer className="disclaimer-foot">Capacitación laboral interna; no otorga título ni certificación oficial. <button className="linkbtn" onClick={() => setShowNotice(true)}>Ver aviso</button></footer>}
+      {showNotice && <div className="modal-bg" onClick={() => setShowNotice(false)}><div className="modal" onClick={e => e.stopPropagation()}>
+        <h2>Aviso legal</h2><p>{DISCLAIMER}</p><button className="btn" onClick={() => setShowNotice(false)}>Cerrar</button></div></div>}
     </div>
   );
+}
+
+const DISCLAIMER = 'Esta plataforma es una herramienta de capacitación laboral interna para personal de mostrador. No otorga título, certificación oficial ni habilitación profesional. El contenido no sustituye normativa sanitaria ni criterio del profesional de salud.';
+
+function DisclaimerGate({ onAccept, error }: { onAccept: () => Promise<void>; error: string }) {
+  const [ok, setOk] = useState(false);
+  const [busy, setBusy] = useState(false);
+  return <main className="card-stack center disclaimer-gate">
+    <h1>Aviso importante</h1>
+    <p>{DISCLAIMER}</p>
+    <label className="check"><input type="checkbox" checked={ok} onChange={e => setOk(e.target.checked)} /> He leído y acepto</label>
+    {error && <p className="feedback bad">{error}</p>}
+    <button className="btn" disabled={!ok || busy} onClick={async () => { setBusy(true); await onAccept(); setBusy(false); }}>{busy ? 'Guardando…' : 'Continuar'}</button>
+    <button className="btn ghost" onClick={() => logout()}>Salir</button>
+  </main>;
 }
 
 function Header({ p, onHome, me, adminOk, onAdmin, onExitAdmin, onLogout }: {

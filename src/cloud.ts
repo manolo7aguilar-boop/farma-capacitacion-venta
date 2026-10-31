@@ -6,7 +6,7 @@ import { addDoc, collection, doc, getDoc, getDocs, query, where, writeBatch, onS
 import { auth, db } from './firebase';
 import { initProgress, type Progress, type StaffRole } from './store';
 
-export interface UserDoc { uid: string; email: string; name: string; role: StaffRole; region: string | null; sucursal: string | null }
+export interface UserDoc { uid: string; email: string; name: string; role: StaffRole; region: string | null; sucursal: string | null; disclaimerAccepted?: boolean }
 export interface TeamRow { user: UserDoc; progress: Progress }
 
 const cacheKey = (uid: string) => `farma-cloud-progress-${uid}`;
@@ -86,7 +86,7 @@ export function useCloud() {
         return;
       }
       const d = snap.data();
-      setMe({ uid, email: d.email, name: d.name, role: d.role, region: d.region ?? null, sucursal: d.sucursal ?? null });
+      setMe({ uid, email: d.email, name: d.name, role: d.role, region: d.region ?? null, sucursal: d.sucursal ?? null, disclaimerAccepted: d.disclaimerAccepted === true });
     }, () => setError('No se pudo leer tu perfil. Revisa las reglas de Firestore.'));
     (async () => {
       try {
@@ -163,3 +163,6 @@ export async function assignSupervisor(uid: string, region: string, team: UserDo
   b.update(doc(db!, 'users', uid), { role: 'supervisor', region, sucursal: clean(sucursal) });
   await b.commit();
 }
+
+export const acceptDisclaimer = (uid: string) =>
+  updateDoc(doc(db!, 'users', uid), { disclaimerAccepted: true, disclaimerAcceptedAt: serverTimestamp() });

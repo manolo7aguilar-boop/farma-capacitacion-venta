@@ -26,7 +26,10 @@ service cloud.firestore {
       // El usuario solo puede cambiar su nombre; solo el administrador cambia rol, región y sucursal.
       allow update: if isSysAdmin()
         || (signedIn() && request.auth.uid == userId
-            && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['name']));
+            && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['name', 'disclaimerAccepted', 'disclaimerAcceptedAt'])
+            && (!('disclaimerAccepted' in request.resource.data) || request.resource.data.disclaimerAccepted == true)
+            && (!request.resource.data.diff(resource.data).affectedKeys().hasAny(['disclaimerAcceptedAt'])
+                || request.resource.data.disclaimerAcceptedAt == request.time));
       allow delete: if isSysAdmin();
     }
 
